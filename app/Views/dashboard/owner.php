@@ -31,7 +31,6 @@ require_once __DIR__ . '/../includes/header.php';
                             <th class="ps-4">Car Model</th>
                             <th>Year</th>
                             <th>Price/Day</th>
-                            <th>Stock</th>
                             <th>Status</th>
                             <th class="text-end pe-4">Actions</th>
                         </tr>
@@ -49,7 +48,6 @@ require_once __DIR__ . '/../includes/header.php';
                                     </td>
                                     <td><?php echo $row['year']; ?></td>
                                     <td>₱<?php echo number_format($row['price_per_day'], 2); ?></td>
-                                    <td><?php echo $row['quantity']; ?></td>
                                     <td>
                                         <?php 
                                         $badge = 'success';
@@ -62,12 +60,12 @@ require_once __DIR__ . '/../includes/header.php';
                                     </td>
                                     <td class="text-end pe-4">
                                         <button class="btn btn-sm btn-light border me-1" onclick='editCar(<?php echo json_encode($row); ?>)'>Edit</button>
-                                        <a href="<?php echo BASE_URL; ?>admin/owner_dashboard.php?id=<?php echo $owner_id; ?>&delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this car?')">Delete</a>
+                                        <a href="<?php echo BASE_URL; ?>admin/owner_dashboard.php?id=<?php echo $owner_id; ?>&delete=<?php echo rawurlencode((string)$row['id']); ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this car?')">Delete</a>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
-                            <tr><td colspan="6" class="text-center py-4 text-muted">No cars added for this owner yet.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted">No cars added for this owner yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -104,10 +102,6 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Total Stock (Quantity)</label>
-                        <input type="number" name="quantity" id="quantity" class="form-control" min="1" value="1" required>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">Description</label>
                         <textarea name="description" id="description" class="form-control" rows="3"></textarea>
                     </div>
@@ -140,7 +134,6 @@ function editCar(car){
     document.getElementById('model').value = car.model;
     document.getElementById('year').value = car.year;
     document.getElementById('price').value = car.price_per_day;
-    document.getElementById('quantity').value = car.quantity;
     document.getElementById('description').value = car.description;
     document.getElementById('status').value = car.status;
     document.getElementById('current_image').value = car.image;
@@ -152,7 +145,6 @@ function editCar(car){
 function resetForm(){
     document.getElementById('modalTitle').innerText = 'Add New Car';
     document.getElementById('car_id').value = '';
-    document.getElementById('quantity').value = '1';
     document.querySelector('form').reset();
 }
 </script>

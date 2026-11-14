@@ -11,7 +11,7 @@ class Car {
     const STATUS_MAINTENANCE = 'maintenance';
     
     // Define vehicle types
-    const TYPES = ['sedan', 'suv', 'truck', 'van', 'sports', 'luxury', 'other'];
+    const TYPES = ['sedan', 'suv', 'truck', 'van', 'sports', 'convertible', 'luxury', 'other'];
 
     public function __construct($mysqli) {
         $this->db = $mysqli;
@@ -21,7 +21,7 @@ class Car {
      * Get all vehicles with filters
      */
     public function getAll($owner_id_filter = null, $status_filter = null, $type_filter = null) {
-        $query = "SELECT c.*, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE 1=1";
+        $query = "SELECT c.*, c.plate_number AS id, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE 1=1";
         
         if ($owner_id_filter) {
             $owner_id_filter = (int)$owner_id_filter;
@@ -44,8 +44,8 @@ class Car {
      * Get vehicle by ID
      */
     public function getById($id) {
-        $stmt = $this->db->prepare("SELECT c.*, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE c.id = ?");
-        $stmt->bind_param("i", $id);
+        $stmt = $this->db->prepare("SELECT c.*, c.plate_number AS id, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE c.plate_number = ?");
+        $stmt->bind_param("s", $id);
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
     }
@@ -54,7 +54,7 @@ class Car {
      * Get vehicle by plate number
      */
     public function getByPlateNumber($plate_number) {
-        $stmt = $this->db->prepare("SELECT * FROM cars WHERE plate_number = ?");
+        $stmt = $this->db->prepare("SELECT cars.*, plate_number AS id FROM cars WHERE plate_number = ?");
         $stmt->bind_param("s", $plate_number);
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
@@ -67,7 +67,7 @@ class Car {
         $status = self::STATUS_AVAILABLE;
         
         $stmt = $this->db->prepare("INSERT INTO cars (plate_number, brand, model, year, type, price_per_day, owner_id, status, description, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssisisss", $plate_number, $brand, $model, $year, $type, $price_per_day, $owner_id, $status, $description, $image);
+        $stmt->bind_param("sssisdisss", $plate_number, $brand, $model, $year, $type, $price_per_day, $owner_id, $status, $description, $image);
         return $stmt->execute();
     }
 
@@ -75,8 +75,8 @@ class Car {
      * Update vehicle information
      */
     public function update($id, $plate_number, $brand, $model, $year, $type, $price_per_day, $description = '', $image = '') {
-        $stmt = $this->db->prepare("UPDATE cars SET plate_number = ?, brand = ?, model = ?, year = ?, type = ?, price_per_day = ?, description = ?, image = ? WHERE id = ?");
-        $stmt->bind_param("ssssisissi", $plate_number, $brand, $model, $year, $type, $price_per_day, $description, $image, $id);
+        $stmt = $this->db->prepare("UPDATE cars SET plate_number = ?, brand = ?, model = ?, year = ?, type = ?, price_per_day = ?, description = ?, image = ? WHERE plate_number = ?");
+        $stmt->bind_param("sssisdsss", $plate_number, $brand, $model, $year, $type, $price_per_day, $description, $image, $id);
         return $stmt->execute();
     }
 
@@ -89,8 +89,8 @@ class Car {
             return false;
         }
         
-        $stmt = $this->db->prepare("UPDATE cars SET status = ? WHERE id = ?");
-        $stmt->bind_param("si", $status, $id);
+        $stmt = $this->db->prepare("UPDATE cars SET status = ? WHERE plate_number = ?");
+        $stmt->bind_param("ss", $status, $id);
         return $stmt->execute();
     }
 
@@ -101,9 +101,9 @@ class Car {
         $owner_id = (int)$owner_id;
         
         if ($status && in_array($status, [self::STATUS_AVAILABLE, self::STATUS_RESERVED, self::STATUS_RENTED, self::STATUS_MAINTENANCE])) {
-            $query = "SELECT * FROM cars WHERE owner_id = $owner_id AND status = '$status' ORDER BY created_at DESC";
+            $query = "SELECT cars.*, plate_number AS id FROM cars WHERE owner_id = $owner_id AND status = '$status' ORDER BY created_at DESC";
         } else {
-            $query = "SELECT * FROM cars WHERE owner_id = $owner_id ORDER BY created_at DESC";
+            $query = "SELECT cars.*, plate_number AS id FROM cars WHERE owner_id = $owner_id ORDER BY created_at DESC";
         }
         
         return $this->db->query($query);
@@ -113,15 +113,20 @@ class Car {
      * Get available vehicles
      */
     public function getAvailable($start_date = null, $end_date = null, $price_max = null) {
-        $query = "SELECT c.* FROM cars c WHERE c.status = ?";
+        $query = "SELECT c.*, c.plate_number AS id FROM cars c WHERE c.status = ?";
         
         // If dates provided, check for no overlapping rentals/reservations
         if ($start_date && $end_date) {
-            $query .= " AND c.id NOT IN (
+            $query .= " AND c.plate_number NOT IN (
                 SELECT DISTINCT car_id FROM rentals 
                 WHERE status IN ('approved', 'pending') 
+                AND NOT EXISTS (
+                    SELECT 1 FROM transactions p
+                    WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                      AND p.payment_status IN ('pending', 'cancelled')
+                )
                 AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))
-            ) AND c.id NOT IN (
+            ) AND c.plate_number NOT IN (
                 SELECT DISTINCT car_id FROM reservations 
                 WHERE status IN ('pending', 'confirmed') 
                 AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))
@@ -139,7 +144,7 @@ class Car {
         
         $status = self::STATUS_AVAILABLE;
         if ($start_date && $end_date) {
-            $stmt->bind_param("ssssss", $status, $start_date, $end_date, $end_date, $start_date, $start_date, $end_date, $end_date, $start_date, $start_date, $end_date);
+            $stmt->bind_param("sssssssssssss", $status, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         } else {
             $stmt->bind_param("s", $status);
         }
@@ -153,14 +158,14 @@ class Car {
      */
     public function getAvailableByOwner($owner_id) {
         $owner_id = (int)$owner_id;
-        return $this->db->query("SELECT * FROM cars WHERE status = '" . self::STATUS_AVAILABLE . "' AND owner_id = $owner_id ORDER BY created_at DESC");
+        return $this->db->query("SELECT cars.*, plate_number AS id FROM cars WHERE status = '" . self::STATUS_AVAILABLE . "' AND owner_id = $owner_id ORDER BY created_at DESC");
     }
 
     /**
      * Get all available vehicles across owners for public browsing.
      */
     public function getAvailableCars($type = null) {
-        $query = "SELECT c.*, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE c.status = '" . self::STATUS_AVAILABLE . "'";
+        $query = "SELECT c.*, c.plate_number AS id, u.name as owner_name FROM cars c LEFT JOIN users u ON c.owner_id = u.id WHERE c.status = '" . self::STATUS_AVAILABLE . "'";
 
         if ($type !== null && $type !== '') {
             $type = strtolower(trim((string) $type));
@@ -178,17 +183,25 @@ class Car {
     /**
      * Check if vehicle is available for rental period
      */
-    public function isAvailableForPeriod($car_id, $start_date, $end_date) {
-        $car_id = (int)$car_id;
+    public function isAvailableForPeriod($car_id, $start_date, $end_date, $includePendingRentals = true) {
+        $car_id = (string)$car_id;
+        $rentalStatusCondition = $includePendingRentals
+            ? "IN ('approved', 'pending')"
+            : "= 'approved'";
         
         // Check for overlapping rentals
         $rental_query = "SELECT COUNT(*) as count FROM rentals 
                         WHERE car_id = ? 
-                        AND status IN ('approved', 'pending')
+                        AND status $rentalStatusCondition
+                        AND NOT EXISTS (
+                            SELECT 1 FROM transactions p
+                            WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                              AND p.payment_status IN ('pending', 'cancelled')
+                        )
                         AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))";
         
         $stmt = $this->db->prepare($rental_query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -203,7 +216,7 @@ class Car {
                             AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))";
         
         $stmt = $this->db->prepare($reservation_query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -216,7 +229,7 @@ class Car {
     public function search($searchTerm, $filters = []) {
         $searchTerm = '%' . $searchTerm . '%';
         
-        $query = "SELECT c.*, u.name as owner_name FROM cars c 
+        $query = "SELECT c.*, c.plate_number AS id, u.name as owner_name FROM cars c
                   LEFT JOIN users u ON c.owner_id = u.id
                   WHERE (c.brand LIKE ? OR c.model LIKE ? OR c.plate_number LIKE ?)";
         
@@ -306,8 +319,8 @@ class Car {
      * Delete vehicle
      */
     public function delete($id) {
-        $stmt = $this->db->prepare("DELETE FROM cars WHERE id = ?");
-        $stmt->bind_param("i", $id);
+        $stmt = $this->db->prepare("DELETE FROM cars WHERE plate_number = ?");
+        $stmt->bind_param("s", $id);
         return $stmt->execute();
     }
 
@@ -327,46 +340,66 @@ class Car {
         return $row['avg_price'] ?? 0;
     }
 
-    public function addCar($model, $year, $price, $desc, $image, $status, $quantity, $owner_id, $type = 'sedan') {
-        $stmt = $this->db->prepare("INSERT INTO cars (model, year, price_per_day, description, image, status, quantity, owner_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sidsssiis", $model, $year, $price, $desc, $image, $status, $quantity, $owner_id, $type);
+    public function addCar($model, $year, $price, $desc, $image, $status, $owner_id, $type = 'sedan', $brand = '', $plate_number = '') {
+        $stmt = $this->db->prepare("INSERT INTO cars (brand, plate_number, model, year, price_per_day, description, image, status, owner_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssidsssis", $brand, $plate_number, $model, $year, $price, $desc, $image, $status, $owner_id, $type);
         return $stmt->execute();
     }
 
-    public function updateCar($id, $model, $year, $price, $desc, $image, $status, $quantity, $owner_id, $type = 'sedan') {
+    public function updateCar($id, $model, $year, $price, $desc, $image, $status, $owner_id, $type = 'sedan', $brand = '', $plate_number = '') {
         if ($owner_id !== null) {
-            $stmt = $this->db->prepare("UPDATE cars SET model=?, year=?, price_per_day=?, description=?, image=?, status=?, quantity=?, owner_id=?, type=? WHERE id=?");
-            $stmt->bind_param("sidsssiisi", $model, $year, $price, $desc, $image, $status, $quantity, $owner_id, $type, $id);
+            $stmt = $this->db->prepare("UPDATE cars SET brand=?, plate_number=?, model=?, year=?, price_per_day=?, description=?, image=?, status=?, owner_id=?, type=? WHERE plate_number=?");
+            $stmt->bind_param("sssidsssiss", $brand, $plate_number, $model, $year, $price, $desc, $image, $status, $owner_id, $type, $id);
         } else {
-            $stmt = $this->db->prepare("UPDATE cars SET model=?, year=?, price_per_day=?, description=?, image=?, status=?, quantity=?, type=? WHERE id=?");
-            $stmt->bind_param("sidsssiis", $model, $year, $price, $desc, $image, $status, $quantity, $type, $id);
+            $stmt = $this->db->prepare("UPDATE cars SET brand=?, plate_number=?, model=?, year=?, price_per_day=?, description=?, image=?, status=?, type=? WHERE plate_number=?");
+            $stmt->bind_param("sssidsssss", $brand, $plate_number, $model, $year, $price, $desc, $image, $status, $type, $id);
         }
         return $stmt->execute();
     }
 
-    public function updateCarForOwner($id, $owner_id, $model, $year, $price, $desc, $image, $status, $quantity, $type = 'sedan') {
-        $stmt = $this->db->prepare("UPDATE cars SET model=?, year=?, price_per_day=?, description=?, image=?, status=?, quantity=?, type=? WHERE id=? AND owner_id=?");
-        $stmt->bind_param("sidsssisii", $model, $year, $price, $desc, $image, $status, $quantity, $type, $id, $owner_id);
+    public function updateCarForOwner($id, $owner_id, $model, $year, $price, $desc, $image, $status, $type = 'sedan') {
+        $stmt = $this->db->prepare("UPDATE cars SET model=?, year=?, price_per_day=?, description=?, image=?, status=?, type=? WHERE plate_number=? AND owner_id=?");
+        $stmt->bind_param("sidsssssi", $model, $year, $price, $desc, $image, $status, $type, $id, $owner_id);
         return $stmt->execute();
     }
 
     public function deleteCar($id) {
-        $stmt = $this->db->prepare("DELETE FROM cars WHERE id = ?");
-        $stmt->bind_param("i", $id);
+        $stmt = $this->db->prepare("DELETE FROM cars WHERE plate_number = ?");
+        $stmt->bind_param("s", $id);
         return $stmt->execute();
     }
 
     public function getActiveBookingsCount($car_id, $today) {
-        $car_id = (int)$car_id;
-        $sql = "SELECT COUNT(*) FROM rentals WHERE car_id = $car_id AND status IN ('pending', 'approved') AND '$today' BETWEEN start_date AND end_date";
-        return $this->db->query($sql)->fetch_row()[0];
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM rentals
+             WHERE car_id = ? AND status IN ('pending', 'approved')
+               AND NOT EXISTS (
+                   SELECT 1 FROM transactions p
+                   WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                     AND p.payment_status IN ('pending', 'cancelled')
+               )
+               AND ? BETWEEN start_date AND end_date"
+        );
+        $stmt->bind_param("ss", $car_id, $today);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_row()[0];
     }
 
     public function getNextAvailableDate($car_id, $today) {
-        $car_id = (int)$car_id;
-        $next_sql = "SELECT MIN(end_date) FROM rentals WHERE car_id = $car_id AND status IN ('pending', 'approved') AND end_date >= '$today'";
-        $next_res = $this->db->query($next_sql);
-        if ($next_res && $date_row = $next_res->fetch_row()) {
+        $stmt = $this->db->prepare(
+            "SELECT MIN(end_date) FROM rentals
+             WHERE car_id = ? AND status IN ('pending', 'approved')
+               AND NOT EXISTS (
+                   SELECT 1 FROM transactions p
+                   WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                     AND p.payment_status IN ('pending', 'cancelled')
+               )
+               AND end_date >= ?"
+        );
+        $stmt->bind_param("ss", $car_id, $today);
+        $stmt->execute();
+        $next_res = $stmt->get_result();
+        if ($date_row = $next_res->fetch_row()) {
             if ($date_row[0]) {
                 return date('M d', strtotime($date_row[0] . ' +1 day'));
             }

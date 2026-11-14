@@ -134,11 +134,11 @@ class Validator {
     public function validateVehicleAvailability($car_id, $start_date, $end_date) {
         $this->clearErrors();
         
-        $car_id = (int)$car_id;
+        $car_id = (string)$car_id;
         
         // Check if vehicle exists
-        $stmt = $this->db->prepare("SELECT id, status FROM cars WHERE id = ?");
-        $stmt->bind_param("i", $car_id);
+        $stmt = $this->db->prepare("SELECT plate_number, status FROM cars WHERE plate_number = ?");
+        $stmt->bind_param("s", $car_id);
         $stmt->execute();
         $car = $stmt->get_result()->fetch_assoc();
         
@@ -156,10 +156,15 @@ class Validator {
         $rental_query = "SELECT COUNT(*) as count FROM rentals 
                         WHERE car_id = ? 
                         AND status IN ('approved', 'pending')
+                        AND NOT EXISTS (
+                            SELECT 1 FROM transactions p
+                            WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                              AND p.payment_status IN ('pending', 'cancelled')
+                        )
                         AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))";
         
         $stmt = $this->db->prepare($rental_query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -175,7 +180,7 @@ class Validator {
                             AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))";
         
         $stmt = $this->db->prepare($reservation_query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -234,9 +239,9 @@ class Validator {
             $this->addError("Plate number is required.");
         } else {
             // Check if plate number is unique (or matches existing for update)
-            $stmt = $this->db->prepare("SELECT id FROM cars WHERE plate_number = ? AND id != ?");
-            $car_id = $for_update ? (int)$data['id'] : 0;
-            $stmt->bind_param("si", $data['plate_number'], $car_id);
+            $stmt = $this->db->prepare("SELECT plate_number FROM cars WHERE plate_number = ? AND plate_number != ?");
+            $car_id = $for_update ? (string)$data['id'] : '';
+            $stmt->bind_param("ss", $data['plate_number'], $car_id);
             $stmt->execute();
             if ($stmt->get_result()->num_rows > 0) {
                 $this->addError("This plate number is already registered.");
@@ -347,12 +352,17 @@ class Validator {
      */
     public function getAvailableVehicles($start_date, $end_date, $price_min = null, $price_max = null, $type = null) {
         $query = "SELECT c.* FROM cars c WHERE c.status = 'available' 
-                  AND c.id NOT IN (
+                  AND c.plate_number NOT IN (
                     SELECT DISTINCT car_id FROM rentals 
                     WHERE status IN ('approved', 'pending') 
+                    AND NOT EXISTS (
+                        SELECT 1 FROM transactions p
+                        WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                          AND p.payment_status IN ('pending', 'cancelled')
+                    )
                     AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))
                   )
-                  AND c.id NOT IN (
+                  AND c.plate_number NOT IN (
                     SELECT DISTINCT car_id FROM reservations 
                     WHERE status IN ('pending', 'confirmed') 
                     AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))
@@ -386,8 +396,8 @@ class Validator {
      * Check if user is owner of vehicle
      */
     public function isVehicleOwner($user_id, $car_id) {
-        $stmt = $this->db->prepare("SELECT id FROM cars WHERE id = ? AND owner_id = ?");
-        $stmt->bind_param("ii", $car_id, $user_id);
+        $stmt = $this->db->prepare("SELECT plate_number FROM cars WHERE plate_number = ? AND owner_id = ?");
+        $stmt->bind_param("si", $car_id, $user_id);
         $stmt->execute();
         return $stmt->get_result()->num_rows > 0;
     }

@@ -21,6 +21,7 @@ class DashboardController {
     public function home() {
         $type = isset($_GET['type']) ? strtolower(trim((string) $_GET['type'])) : '';
         $cars = $this->carModel->getAvailableCars($type);
+        $carModel = $this->carModel;
         require_once __DIR__ . '/../Views/dashboard/home.php';
     }
 
@@ -96,7 +97,11 @@ class DashboardController {
         $error = '';
         // Handle Delete
         if (isset($_GET['delete'])) {
-            $id = $_GET['delete'];
+            $id = is_string($_GET['delete']) ? $_GET['delete'] : '';
+            if ($id === '') {
+                header("Location: " . BASE_URL . "admin/owner_dashboard.php?id=$owner_id");
+                exit;
+            }
             $this->carModel->deleteCar($id);
             header("Location: " . BASE_URL . "admin/owner_dashboard.php?id=$owner_id");
             exit;
@@ -109,9 +114,7 @@ class DashboardController {
             $price = $_POST['price'] ?? 0;
             $desc = $_POST['description'] ?? '';
             $status = $_POST['status'] ?? 'available';
-            $car_id = $_POST['car_id'] ?? null;
-            $quantity = $_POST['quantity'] ?? 1;
-
+            $car_id = isset($_POST['car_id']) && is_string($_POST['car_id']) ? trim($_POST['car_id']) : '';
             $image = $_POST['current_image'] ?? '';
             if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
                 $target_dir = __DIR__ . "/../../uploads/";
@@ -122,10 +125,10 @@ class DashboardController {
                 }
             }
 
-            if ($car_id) {
-                $success = $this->carModel->updateCarForOwner($car_id, $owner_id, $model, $year, $price, $desc, $image, $status, $quantity);
+            if ($car_id !== '') {
+                $success = $this->carModel->updateCarForOwner($car_id, $owner_id, $model, $year, $price, $desc, $image, $status);
             } else {
-                $success = $this->carModel->addCar($model, $year, $price, $desc, $image, $status, $quantity, $owner_id);
+                $success = $this->carModel->addCar($model, $year, $price, $desc, $image, $status, $owner_id);
             }
 
             if ($success) {

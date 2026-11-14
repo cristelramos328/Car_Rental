@@ -140,12 +140,53 @@ body {
 }
 
 .bg-gradient-primary h1 {
-    color: rgba(15, 23, 42, 0.15);
+    color: var(--text-primary);
     font-size: clamp(2.6rem, 4vw, 4.3rem);
     line-height: 0.96;
     letter-spacing: -0.06em;
     margin: 0;
     font-weight: 800;
+}
+
+.customer-filter-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+}
+
+.customer-car-details-image {
+    height: clamp(220px, 42vh, 360px);
+    object-fit: contain;
+    background: var(--surface-alt);
+}
+
+.customer-car-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-height: 78px;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-alt);
+}
+
+.customer-car-detail > span {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.customer-car-detail > strong {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.customer-car-detail-description {
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
 }
 
 .bg-gradient-primary .lead {
@@ -163,14 +204,19 @@ body {
 }
 
 .bg-gradient-primary .form-select {
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: var(--surface);
+    border: 1px solid var(--border);
     color: var(--text-primary);
     height: 52px;
     font-size: 1rem;
     padding-left: 1.1rem;
     padding-right: 2.5rem;
     box-shadow: none;
+}
+
+.bg-gradient-primary .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
 }
 
 .bg-gradient-primary .form-label {
@@ -274,6 +320,10 @@ body {
 .admin-sidebar {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
     background: var(--secondary);
     color: var(--sidebar-text);
     padding: 1.6rem 1.1rem 1.4rem;
@@ -285,6 +335,7 @@ body {
 
 .admin-sidebar-footer {
     margin-top: auto;
+    flex-shrink: 0;
 }
 
 .admin-sidebar-footer .btn-outline-danger {
@@ -339,7 +390,10 @@ body {
 .admin-nav {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: 0.4rem;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .admin-nav a {
@@ -748,6 +802,8 @@ body {
     .admin-sidebar {
         width: 100%;
         min-width: 100%;
+        height: auto;
+        position: static;
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
@@ -764,7 +820,10 @@ body {
 
     .admin-nav {
         flex-direction: row;
+        flex: 0 0 auto;
         gap: 0.3rem;
+        min-height: auto;
+        overflow: visible;
     }
 
     .admin-nav a {
@@ -779,6 +838,17 @@ body {
         margin-top: 0;
         margin-left: auto;
         padding: 0.6rem 1rem;
+    }
+
+    .admin-sidebar-footer {
+        margin-top: 0 !important;
+        margin-left: auto;
+        padding-top: 0 !important;
+        border-top: 0 !important;
+    }
+
+    .admin-sidebar-footer .btn {
+        width: auto !important;
     }
 
     .admin-main {
@@ -960,6 +1030,12 @@ body {
     background: #e2e8f0;
 }
 
+.fleet-image-wrap .fleet-image-carousel,
+.fleet-image-wrap .carousel-inner,
+.fleet-image-wrap .carousel-item {
+    height: 100%;
+}
+
 .fleet-image-wrap img {
     display: block;
     width: 100%;
@@ -1070,6 +1146,19 @@ body {
 
 .modal-content {
     border-radius: 1rem;
+}
+
+#carModal .modal-content > form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#carModal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .detail-modal-shell {

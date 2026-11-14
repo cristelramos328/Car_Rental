@@ -11,24 +11,68 @@ class Rental {
         $this->db = $mysqli;
     }
 
-    public function createRental($user_id, $car_id, $start_date, $end_date, $total_price) {
-        $stmt = $this->db->prepare("INSERT INTO rentals (user_id, car_id, start_date, end_date, total_price, status) VALUES (?, ?, ?, ?, ?, 'pending')");
-        $stmt->bind_param("iissd", $user_id, $car_id, $start_date, $end_date, $total_price);
+    public function createRental($user_id, $car_id, $start_date, $end_date, $total_price, $license_number = '', $license_image = null, $customer_name = null, $customer_phone = null, $customer_address = null, $customer_latitude = null, $customer_longitude = null) {
+        $stmt = $this->db->prepare("INSERT INTO rentals (user_id, car_id, start_date, end_date, total_price, status, driver_license_number, driver_license_image, customer_name, customer_phone, customer_address, customer_latitude, customer_longitude) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("isssdsssssss", $user_id, $car_id, $start_date, $end_date, $total_price, $license_number, $license_image, $customer_name, $customer_phone, $customer_address, $customer_latitude, $customer_longitude);
         return $stmt->execute();
     }
 
     public function getUserRentals($user_id) {
-        $stmt = $this->db->prepare("SELECT r.*, c.model, c.image FROM rentals r JOIN cars c ON r.car_id = c.id WHERE r.user_id = ? ORDER BY r.created_at DESC");
+        $stmt = $this->db->prepare("SELECT r.*, c.model, c.brand, c.plate_number, c.image,
+                                           p.id AS payment_id, p.amount, p.payment_method, p.payment_status,
+                                           p.reference_number, p.transaction_id, p.payment_date,
+                                           p.created_at AS payment_created_at, p.receipt_image
+                                    FROM rentals r
+                                    JOIN cars c ON r.car_id = c.plate_number
+                                    LEFT JOIN transactions p ON p.rental_id = r.id
+                                    WHERE r.user_id = ?
+                                      AND (p.id IS NULL OR NOT (
+                                           p.payment_method = 'online'
+                                           AND p.payment_status IN ('pending', 'cancelled')
+                                      ))
+                                    ORDER BY r.created_at DESC");
         $stmt->bind_param("i", $user_id);
         $stmt->execute();
         return $stmt->get_result();
     }
 
+    public function getUserReceipt($rental_id, $user_id) {
+        $stmt = $this->db->prepare("SELECT r.id AS rental_id, r.start_date, r.end_date, r.total_price, r.status AS rental_status,
+                                           r.driver_license_number, r.created_at AS rental_created_at, r.updated_at AS rental_updated_at,
+                                           c.brand, c.model, c.type, c.price_per_day, c.plate_number, c.image,
+                                           COALESCE(NULLIF(r.customer_name, ''), u.name) AS customer_name,
+                                           u.email AS customer_email,
+                                           COALESCE(NULLIF(r.customer_phone, ''), u.phone) AS customer_phone,
+                                           COALESCE(NULLIF(r.customer_address, ''), u.address) AS customer_address,
+                                           p.amount, p.payment_method, p.payment_status, p.transaction_id,
+                                           p.reference_number, p.payment_date, p.created_at AS payment_created_at
+                                    FROM rentals r
+                                    JOIN cars c ON r.car_id = c.plate_number
+                                    JOIN users u ON r.user_id = u.id
+                                    LEFT JOIN transactions p ON p.rental_id = r.id AND p.user_id = r.user_id
+                                    WHERE r.id = ? AND r.user_id = ?
+                                      AND r.status IN ('approved', 'completed')
+                                    LIMIT 1");
+        $stmt->bind_param("ii", $rental_id, $user_id);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_assoc();
+    }
+
     public function getAllRentals() {
-        $sql = "SELECT r.*, u.name as user_name, c.model as car_model 
+        $sql = "SELECT r.*, COALESCE(NULLIF(r.customer_name, ''), u.name) as user_name, u.email,
+                       COALESCE(NULLIF(r.customer_phone, ''), u.phone) as phone,
+                       COALESCE(NULLIF(r.customer_address, ''), u.address) as address,
+                       c.model as car_model, c.brand, c.plate_number,
+                       p.id as payment_id, p.payment_method, p.payment_status,
+                       p.reference_number, p.receipt_image
                 FROM rentals r 
                 JOIN users u ON r.user_id = u.id 
-                JOIN cars c ON r.car_id = c.id 
+                JOIN cars c ON r.car_id = c.plate_number
+                LEFT JOIN transactions p ON p.rental_id = r.id
+                WHERE p.id IS NULL OR NOT (
+                    p.payment_method = 'online'
+                    AND p.payment_status IN ('pending', 'cancelled')
+                )
                 ORDER BY r.created_at DESC";
         return $this->db->query($sql);
     }
@@ -38,8 +82,13 @@ class Rental {
         $sql = "SELECT r.*, u.name as user_name, c.model, c.year, c.image 
                 FROM rentals r 
                 JOIN users u ON r.user_id = u.id 
-                JOIN cars c ON r.car_id = c.id 
+                JOIN cars c ON r.car_id = c.plate_number
                 WHERE r.status IN ('pending', 'approved', 'rejected', 'completed')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM transactions p
+                      WHERE p.rental_id = r.id AND p.payment_method = 'online'
+                        AND p.payment_status IN ('pending', 'cancelled')
+                  )
                 ORDER BY r.created_at DESC LIMIT $limit";
         return $this->db->query($sql);
     }
@@ -48,7 +97,7 @@ class Rental {
         $query = "SELECT r.*, u.email, u.name as user_name, c.model as car_model 
                   FROM rentals r 
                   JOIN users u ON r.user_id = u.id 
-                  JOIN cars c ON r.car_id = c.id 
+                  JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.id = ?";
         $stmt = $this->db->prepare($query);
         $stmt->bind_param("i", $rental_id);
@@ -63,12 +112,28 @@ class Rental {
     }
 
     public function getPendingCount() {
-        $result = $this->db->query("SELECT COUNT(*) as count FROM rentals WHERE status = 'pending'");
+        $result = $this->db->query(
+            "SELECT COUNT(*) as count FROM rentals r
+             WHERE r.status = 'pending'
+               AND NOT EXISTS (
+                   SELECT 1 FROM transactions p
+                   WHERE p.rental_id = r.id AND p.payment_method = 'online'
+                     AND p.payment_status IN ('pending', 'cancelled')
+               )"
+        );
         return $result ? $result->fetch_assoc()['count'] : 0;
     }
 
     public function getActiveCount() {
-        $result = $this->db->query("SELECT COUNT(*) as count FROM rentals WHERE status IN ('pending', 'approved')");
+        $result = $this->db->query(
+            "SELECT COUNT(*) as count FROM rentals r
+             WHERE r.status IN ('pending', 'approved')
+               AND NOT EXISTS (
+                   SELECT 1 FROM transactions p
+                   WHERE p.rental_id = r.id AND p.payment_method = 'online'
+                     AND p.payment_status IN ('pending', 'cancelled')
+               )"
+        );
         return $result ? $result->fetch_assoc()['count'] : 0;
     }
 

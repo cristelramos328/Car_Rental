@@ -110,11 +110,21 @@ class User {
         return $stmt->get_result();
     }
 
+    public function getActiveCustomers() {
+        $query = "SELECT id, name, email, phone FROM users WHERE role = ? AND status = ? ORDER BY name ASC";
+        $stmt = $this->db->prepare($query);
+        $role = self::ROLE_CUSTOMER;
+        $status = self::STATUS_ACTIVE;
+        $stmt->bind_param("ss", $role, $status);
+        $stmt->execute();
+        return $stmt->get_result();
+    }
+
     /**
      * Get owners with vehicles
      */
     public function getOwnersWithCars() {
-        $query = "SELECT DISTINCT u.id, u.name, u.email, u.phone, COUNT(c.id) as car_count 
+        $query = "SELECT DISTINCT u.id, u.name, u.email, u.phone, COUNT(c.plate_number) as car_count
                   FROM users u 
                   LEFT JOIN cars c ON u.id = c.owner_id 
                   WHERE u.role = ? 

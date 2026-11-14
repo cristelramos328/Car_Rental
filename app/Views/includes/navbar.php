@@ -33,7 +33,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         <a class="nav-link px-3 fw-semibold <?php echo ($current_page == 'dashboard.php') ? 'active text-primary' : ''; ?>" href="<?php echo BASE_URL; ?>dashboard.php">Browse Cars</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3 fw-semibold <?php echo ($current_page == 'my_rentals.php') ? 'active text-primary' : ''; ?>" href="<?php echo BASE_URL; ?>my_rentals.php">My Rentals</a>
+                        <a class="nav-link px-3 fw-semibold <?php echo ($current_page == 'my_rentals.php') ? 'active text-primary' : ''; ?>" href="<?php echo BASE_URL; ?>my_rentals.php">My Rentals &amp; Receipts</a>
                     </li>
                     <li class="nav-item ms-lg-3">
                         <span class="navbar-text me-3 fw-semibold">Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Customer'); ?></span>
@@ -53,9 +53,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3 fw-semibold nav-section-link" href="<?php echo BASE_URL; ?>index.php#how-it-works">How It Works</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link px-3 fw-semibold nav-section-link" href="<?php echo BASE_URL; ?>index.php#reviews">Reviews</a>
                     </li>
                     <li class="nav-item ms-lg-3">
                         <a class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" href="<?php echo BASE_URL; ?>login.php">
@@ -96,8 +93,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     matchedLink = document.querySelector('a[href$="#features"]');
                 } else if (hash === '#how-it-works') {
                     matchedLink = document.querySelector('a[href$="#how-it-works"]');
-                } else if (hash === '#reviews') {
-                    matchedLink = document.querySelector('a[href$="#reviews"]');
                 }
             }
 

@@ -12,11 +12,17 @@ if ($isAjaxRequest) {
         while($row = $cars->fetch_assoc()) {
             $car_id = $row['id'];
             $car_imgs = getCarImagesList($row['image']);
-            $available_qty = max(0, (int)($row['quantity'] ?? 0));
+            $carousel_id = 'fleetGallery' . substr(hash('sha256', (string)$car_id), 0, 12);
+            $active_count = $carModel->getActiveBookingsCount($car_id, date('Y-m-d'));
+            $available_qty = ((int)$active_count === 0 && ($row['status'] ?? 'available') === 'available') ? 1 : 0;
             echo '<article class="fleet-card">';
             echo '<div class="fleet-image-wrap">';
             if (!empty($car_imgs)) {
-                echo '<img src="' . BASE_URL . 'uploads/' . htmlspecialchars($car_imgs[0]) . '" alt="' . htmlspecialchars($row['model']) . '">';
+                echo '<div id="' . $carousel_id . '" class="carousel slide carousel-fade fleet-image-carousel" data-bs-ride="carousel" data-bs-interval="3000" data-bs-pause="false"><div class="carousel-inner h-100">';
+                foreach ($car_imgs as $index => $image) {
+                    echo '<div class="carousel-item h-100 ' . ($index === 0 ? 'active' : '') . '"><img src="' . BASE_URL . 'uploads/' . htmlspecialchars($image, ENT_QUOTES, 'UTF-8') . '" alt="' . htmlspecialchars($row['model'], ENT_QUOTES, 'UTF-8') . '"></div>';
+                }
+                echo '</div></div>';
             } else {
                 echo '<img src="https://via.placeholder.com/800x500?text=Premium+Fleet" alt="' . htmlspecialchars($row['model']) . '">';
             }
@@ -106,12 +112,22 @@ if ($isAjaxRequest) {
                         <?php
                             $car_id = $row['id'];
                             $car_imgs = getCarImagesList($row['image']);
-                            $available_qty = max(0, (int)($row['quantity'] ?? 0));
+                            $carousel_id = 'fleetGallery' . substr(hash('sha256', (string)$car_id), 0, 12);
+                            $active_count = $carModel->getActiveBookingsCount($car_id, date('Y-m-d'));
+                            $available_qty = ((int)$active_count === 0 && ($row['status'] ?? 'available') === 'available') ? 1 : 0;
                         ?>
                         <article class="fleet-card">
                             <div class="fleet-image-wrap">
                                 <?php if(!empty($car_imgs)): ?>
-                                    <img src="<?php echo BASE_URL; ?>uploads/<?php echo htmlspecialchars($car_imgs[0]); ?>" alt="<?php echo htmlspecialchars($row['model']); ?>">
+                                    <div id="<?php echo $carousel_id; ?>" class="carousel slide carousel-fade fleet-image-carousel" data-bs-ride="carousel" data-bs-interval="3000" data-bs-pause="false">
+                                        <div class="carousel-inner h-100">
+                                            <?php foreach($car_imgs as $idx => $image): ?>
+                                                <div class="carousel-item h-100 <?php echo $idx === 0 ? 'active' : ''; ?>">
+                                                    <img src="<?php echo BASE_URL; ?>uploads/<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($row['model'], ENT_QUOTES, 'UTF-8'); ?>">
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
                                 <?php else: ?>
                                     <img src="https://via.placeholder.com/800x500?text=Premium+Fleet" alt="<?php echo htmlspecialchars($row['model']); ?>">
                                 <?php endif; ?>
@@ -282,98 +298,6 @@ if ($isAjaxRequest) {
     </div>
 </section>
 
-<!-- Boxed Testimonials Grid -->
-<section id="reviews" class="section-spacing bg-light">
-    <div class="container">
-        <div class="text-center mb-5" style="max-width: 600px; margin: 0 auto;">
-            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-bold mb-3">Client Feedback</span>
-            <h2 class="display-6 fw-bold mb-3">What Our Drivers Say</h2>
-            <p class="text-muted fs-6">Real stories from travelers, business professionals, and fleet managers.</p>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="testimonial-card h-100 d-flex flex-column justify-content-between">
-                    <div>
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="text-warning me-2">
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                            </div>
-                            <span class="small fw-bold text-muted">5.0 Rating</span>
-                        </div>
-                        <p class="text-muted mb-4 fs-6 lh-relaxed">"The booking experience was flawless. Vehicle arrived spotless and ready to drive. Highly recommended service!"</p>
-                    </div>
-                    <div class="d-flex align-items-center pt-3 border-top border-light">
-                        <div class="avatar-circle bg-primary bg-opacity-10 text-primary me-3 fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                            M
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0">Marcus Vance</h6>
-                            <small class="text-muted">Verified Customer</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="testimonial-card h-100 d-flex flex-column justify-content-between">
-                    <div>
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="text-warning me-2">
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                            </div>
-                            <span class="small fw-bold text-muted">5.0 Rating</span>
-                        </div>
-                        <p class="text-muted mb-4 fs-6 lh-relaxed">"Extremely responsive support and zero surprise charges. I appreciate the transparent pricing structure."</p>
-                    </div>
-                    <div class="d-flex align-items-center pt-3 border-top border-light">
-                        <div class="avatar-circle bg-success bg-opacity-10 text-success me-3 fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                            S
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0">Sophia Reyes</h6>
-                            <small class="text-muted">Business Traveler</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="testimonial-card h-100 d-flex flex-column justify-content-between">
-                    <div>
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="text-warning me-2">
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                                <i class="bi bi-star-fill"></i>
-                            </div>
-                            <span class="small fw-bold text-muted">5.0 Rating</span>
-                        </div>
-                        <p class="text-muted mb-4 fs-6 lh-relaxed">"Managing our owner fleet and tracking rental requests is smooth and effective. Great platform design."</p>
-                    </div>
-                    <div class="d-flex align-items-center pt-3 border-top border-light">
-                        <div class="avatar-circle bg-info bg-opacity-10 text-info me-3 fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-                            D
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0">David Miller</h6>
-                            <small class="text-muted">Car Owner / Admin</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
 <!-- Boxed Call to Action Banner -->
 <div class="container my-5 py-3">
     <div class="cta-banner p-5 text-center text-lg-start">
@@ -399,6 +323,20 @@ if ($isAjaxRequest) {
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        function initializeFleetImageCarousels(root) {
+            if (typeof bootstrap === 'undefined') return;
+            root.querySelectorAll('.fleet-image-carousel').forEach(function (carousel) {
+                bootstrap.Carousel.getOrCreateInstance(carousel, {
+                    interval: 3000,
+                    wrap: true,
+                    pause: false,
+                    touch: true
+                }).cycle();
+            });
+        }
+
+        initializeFleetImageCarousels(document);
+
         const filterSelect = document.getElementById('fleetTypeFilter');
         const fleetForm = document.getElementById('fleetFilterForm');
         const fleetResults = document.getElementById('fleetResults');
@@ -434,6 +372,7 @@ if ($isAjaxRequest) {
                     } else {
                         fleetResults.innerHTML = html;
                     }
+                    initializeFleetImageCarousels(fleetResults);
                     const currentHash = window.location.hash;
                     if (currentHash) {
                         history.replaceState(null, '', window.location.pathname + window.location.search + currentHash);
@@ -468,9 +407,9 @@ if ($isAjaxRequest) {
                     existingCarousel.dispose();
                     new bootstrap.Carousel(modalCarousel, {
                         ride: 'carousel',
-                        interval: 3500,
+                        interval: 3000,
                         wrap: true,
-                        pause: 'hover',
+                        pause: false,
                         touch: true
                     });
                 }

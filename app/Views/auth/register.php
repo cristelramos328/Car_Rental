@@ -71,6 +71,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
 
                 <form action="<?php echo BASE_URL; ?>register.php" method="post">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <div class="form-floating mb-3">
                         <input type="text" name="name" class="form-control" id="floatingName" placeholder="John Doe" required>
                         <label for="floatingName">Full Name</label>

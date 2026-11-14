@@ -9,7 +9,7 @@ if (!$mysqli) {
 }
 
 if (!empty($_GET['modal']) && $_GET['modal'] === '1') {
-    $car_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    $car_id = isset($_GET['id']) && is_string($_GET['id']) ? trim($_GET['id']) : '';
     $carModel = new \App\Models\Car($mysqli);
     $car = $carModel->getById($car_id);
 
@@ -20,12 +20,11 @@ if (!empty($_GET['modal']) && $_GET['modal'] === '1') {
     }
 
     $car_imgs = getCarImagesList($car['image']);
-    $car_id = (int)$car['id'];
-    $total_units = (int)($car['quantity'] ?? 1);
+    $car_id = (string)$car['id'];
     $today = date('Y-m-d');
     $active_count = $carModel->getActiveBookingsCount($car_id, $today);
-    $avail_stock = max(0, $total_units - $active_count);
-    $is_fully_rented = ($avail_stock <= 0 || ($car['status'] ?? 'available') === 'rented');
+    $avail_stock = ((int)$active_count === 0 && ($car['status'] ?? 'available') === 'available') ? 1 : 0;
+    $is_fully_rented = ($avail_stock === 0 || ($car['status'] ?? 'available') === 'rented');
 
     echo '<div class="modal-content border-0 rounded-4 overflow-hidden shadow-lg detail-modal-shell">';
     echo '<div class="modal-header border-0 px-4 pt-4 pb-0 justify-content-between align-items-center">';
@@ -36,7 +35,7 @@ if (!empty($_GET['modal']) && $_GET['modal'] === '1') {
     echo '</div>';
     echo '<div class="modal-body p-0">';
 
-    echo '<div id="vehicleModalCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="3500" data-bs-wrap="true">';
+    echo '<div id="vehicleModalCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="3000" data-bs-wrap="true">';
     if (count($car_imgs) > 1) {
         echo '<div class="carousel-indicators">';
         foreach ($car_imgs as $idx => $img) {
@@ -86,11 +85,13 @@ if (!empty($_GET['modal']) && $_GET['modal'] === '1') {
     echo '<div class="col-6"><div class="detail-info-card"><div class="detail-meta">Owner</div><div class="detail-value">' . htmlspecialchars($car['owner_name'] ?? 'System Administrator') . '</div></div></div>';
     echo '<div class="col-6"><div class="detail-info-card"><div class="detail-meta">Vehicle type</div><div class="detail-value text-capitalize">' . htmlspecialchars($car['type'] ?? 'Vehicle') . '</div></div></div>';
     echo '<div class="col-6"><div class="detail-info-card"><div class="detail-meta">Status</div><div class="detail-value ' . ($is_fully_rented ? 'text-danger' : 'text-success') . '">' . ($is_fully_rented ? 'Booked / Unavailable' : 'Ready to rent') . '</div></div></div>';
-    echo '<div class="col-6"><div class="detail-info-card"><div class="detail-meta">Quantity</div><div class="detail-value">' . htmlspecialchars((string)($car['quantity'] ?? 1)) . ' total units</div></div></div>';
     echo '</div>';
 
     echo '<div class="d-grid">';
-    echo '<a href="' . BASE_URL . 'register.php" class="btn btn-primary btn-lg rounded-3 fw-bold detail-book-btn">Book now</a>';
+    $bookUrl = isset($_SESSION['user_id'])
+        ? BASE_URL . 'car_details.php?id=' . rawurlencode((string)$car['id'])
+        : BASE_URL . 'login.php';
+    echo '<a href="' . htmlspecialchars($bookUrl, ENT_QUOTES, 'UTF-8') . '" class="btn btn-primary btn-lg rounded-3 fw-bold detail-book-btn">Book now</a>';
     echo '</div>';
     echo '</div>';
     echo '</div>';
@@ -139,12 +140,11 @@ require_once __DIR__ . '/../includes/navbar.php';
             <?php endif; ?>
             
             <?php 
-                $car_id = (int)$car['id'];
-                $total_units = (int)($car['quantity'] ?? 1);
+                $car_id = (string)$car['id'];
                 $today = date('Y-m-d');
                 $carModelObj = new \App\Models\Car($mysqli);
                 $active_count = $carModelObj->getActiveBookingsCount($car_id, $today);
-                $avail_stock = max(0, $total_units - $active_count);
+                $avail_stock = ((int)$active_count === 0 && ($car['status'] ?? 'available') === 'available') ? 1 : 0;
                 $is_fully_rented = ($avail_stock <= 0 || ($car['status'] ?? 'available') === 'rented');
             ?>
 
@@ -183,7 +183,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                 <?php if ($is_fully_rented): ?>
                     <div class="alert alert-danger border-0 shadow-sm rounded-4 p-3 mb-4">
                         <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                        <strong>Fully Rented:</strong> All <?php echo $total_units; ?> unit(s) of this vehicle are currently rented out. Please check back later.
+                        <strong>Fully Rented:</strong> This vehicle is currently rented out. Please check back later.
                     </div>
                 <?php endif; ?>
 
@@ -192,9 +192,8 @@ require_once __DIR__ . '/../includes/navbar.php';
                     <span class="text-muted mb-2">/ day</span>
                 </div>
 
-                <form action="<?php echo BASE_URL; ?>rent_process.php" method="POST" id="rentalForm">
-                    <input type="hidden" name="car_id" value="<?php echo $car['id']; ?>">
-                    <input type="hidden" name="price" id="pricePerDay" value="<?php echo $car['price_per_day']; ?>">
+                <form action="<?php echo BASE_URL; ?>rent_process.php" method="POST" enctype="multipart/form-data" id="rentalForm" autocomplete="off">
+                    <input type="hidden" name="car_id" value="<?php echo htmlspecialchars((string)$car['id'], ENT_QUOTES, 'UTF-8'); ?>">
                     
                     <div class="row g-3 mb-4">
                         <div class="col-6">
@@ -205,6 +204,56 @@ require_once __DIR__ . '/../includes/navbar.php';
                             <label class="form-label text-uppercase small text-muted fw-bold">Return Date</label>
                             <input type="date" name="end_date" id="endDate" class="form-control form-control-lg bg-light border-0" required min="<?php echo date('Y-m-d'); ?>" <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
                         </div>
+                    </div>
+
+                    <div class="border rounded-3 p-3 mb-4">
+                        <h4 class="h6 fw-bold mb-3">Customer information</h4>
+                        <div class="mb-3">
+                            <label for="customerName" class="form-label text-uppercase small text-muted fw-bold">Full name</label>
+                            <input type="text" name="customer_name" id="customerName" class="form-control bg-light" value="<?php echo htmlspecialchars($customer['name'] ?? ($_SESSION['username'] ?? '')); ?>" placeholder="Your Name" maxlength="100" autocomplete="new-password" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                        </div>
+                        <div class="mb-3">
+                            <label for="customerPhone" class="form-label text-uppercase small text-muted fw-bold">Contact number</label>
+                            <input type="tel" name="customer_phone" id="customerPhone" class="form-control bg-light" value="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>" placeholder="09123456789" pattern="[0-9]{1,11}" inputmode="numeric" title="Enter up to 11 digits, numbers only." autocomplete="tel" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                        </div>
+                        <div>
+                            <label for="customerAddress" class="form-label text-uppercase small text-muted fw-bold">Address</label>
+                            <textarea name="customer_address" id="customerAddress" class="form-control bg-light" rows="2" maxlength="2000" placeholder="House number, street, barangay, city" autocomplete="new-password" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>><?php echo htmlspecialchars($customer['address'] ?? ''); ?></textarea>
+                            <input type="hidden" name="customer_latitude" id="customerLatitude">
+                            <input type="hidden" name="customer_longitude" id="customerLongitude">
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill mt-2" id="getCustomerLocation" <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                                <i class="bi bi-crosshair me-1"></i> Pin Current location
+                            </button>
+                            <div id="customerLocationStatus" class="form-text" aria-live="polite">Optional: add a GPS pin so the owner can find your location.</div>
+                            <div id="customerLocationPreview" class="mt-3" hidden>
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <p class="small text-success fw-semibold mb-0"><i class="bi bi-geo-alt-fill me-1"></i><span id="customerCoordinates"></span></p>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-danger text-nowrap" id="clearCustomerLocation">Remove pin</button>
+                                </div>
+                                <div class="ratio ratio-16x9 rounded-3 overflow-hidden">
+                                    <iframe id="customerLocationMap" title="Booking GPS pin preview" loading="lazy"></iframe>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="driverLicenseNumber" class="form-label text-uppercase small text-muted fw-bold">Driver's License Number</label>
+                        <input type="text" name="driver_license_number" id="driverLicenseNumber" class="form-control form-control-lg bg-light border-0" maxlength="100" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                    </div>
+                    <div class="mb-4">
+                        <label for="driverLicenseImage" class="form-label text-uppercase small text-muted fw-bold">Upload Driver's License</label>
+                        <input type="file" name="driver_license_image" id="driverLicenseImage" class="form-control bg-light border-0" accept="image/jpeg,image/png,image/webp" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                        <div class="form-text">JPEG, PNG, or WebP; maximum 5 MB. Your document is private.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="paymentMethod" class="form-label text-uppercase small text-muted fw-bold">Payment Method</label>
+                        <select name="payment_method" id="paymentMethod" class="form-select form-select-lg bg-light border-0" required <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                            <option value="cash">Cash upon pickup</option>
+                            <option value="online">E-wallet (PayMongo)</option>
+                        </select>
+                        <div class="form-text">Pay securely with GCash, Maya, or GrabPay after submitting your request.</div>
                     </div>
 
                     <!-- Computed Total Display -->
@@ -230,13 +279,13 @@ require_once __DIR__ . '/../includes/navbar.php';
                         </div>
                     </div>
 
-                    <button type="submit" class="btn <?php echo $is_fully_rented ? 'btn-secondary disabled' : 'btn-primary'; ?> btn-lg w-100 py-3 fw-bold shadow-hover hover-float" <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
+                    <button type="submit" id="rentalSubmitButton" class="btn <?php echo $is_fully_rented ? 'btn-secondary disabled' : 'btn-primary'; ?> btn-lg w-100 py-3 fw-bold shadow-hover hover-float" <?php echo $is_fully_rented ? 'disabled' : ''; ?>>
                         <?php echo $is_fully_rented ? 'Fully Rented — Unavailable' : 'Confirm Rental Request'; ?>
                     </button>
                     
                     <p class="text-center text-muted small mt-3 mb-0">
                         <i class="bi bi-shield-lock-fill me-1 text-success"></i> 
-                        Zero payment now. Pay upon pickup.
+                        E-wallet payments are processed by PayMongo; cash is paid upon pickup.
                     </p>
                 </form>
             </div>
@@ -247,9 +296,84 @@ require_once __DIR__ . '/../includes/navbar.php';
 <script>
 const startDate = document.getElementById('startDate');
 const endDate = document.getElementById('endDate');
-const pricePerDay = parseFloat(document.getElementById('pricePerDay').value);
+const customerPhone = document.getElementById('customerPhone');
+const pricePerDay = <?php echo json_encode((float)$car['price_per_day']); ?>;
 const totalBox = document.getElementById('totalBox');
 const totalPrice = document.getElementById('totalPrice');
+const paymentMethod = document.getElementById('paymentMethod');
+const rentalSubmitButton = document.getElementById('rentalSubmitButton');
+const getCustomerLocation = document.getElementById('getCustomerLocation');
+const customerLatitude = document.getElementById('customerLatitude');
+const customerLongitude = document.getElementById('customerLongitude');
+const customerLocationStatus = document.getElementById('customerLocationStatus');
+const customerLocationPreview = document.getElementById('customerLocationPreview');
+const customerCoordinates = document.getElementById('customerCoordinates');
+const customerLocationMap = document.getElementById('customerLocationMap');
+const clearCustomerLocation = document.getElementById('clearCustomerLocation');
+
+function keepCustomerPhoneDigits() {
+    customerPhone.value = customerPhone.value.replace(/[^0-9]/g, '').slice(0, 11);
+}
+
+customerPhone.addEventListener('input', keepCustomerPhoneDigits);
+keepCustomerPhoneDigits();
+
+clearCustomerLocation.addEventListener('click', function () {
+    customerLatitude.value = '';
+    customerLongitude.value = '';
+    customerLocationMap.removeAttribute('src');
+    customerLocationPreview.hidden = true;
+    customerLocationStatus.textContent = 'GPS pin removed. Your written address will be used.';
+});
+
+getCustomerLocation.addEventListener('click', function () {
+    if (!navigator.geolocation) {
+        customerLocationStatus.textContent = 'GPS location is not supported by this browser.';
+        return;
+    }
+
+    customerLocationStatus.textContent = 'Getting your GPS location...';
+    getCustomerLocation.disabled = true;
+    navigator.geolocation.getCurrentPosition(function (position) {
+        const latitude = position.coords.latitude.toFixed(7);
+        const longitude = position.coords.longitude.toFixed(7);
+        customerLatitude.value = latitude;
+        customerLongitude.value = longitude;
+        customerCoordinates.textContent = latitude + ', ' + longitude +
+            ' (accurate within about ' + Math.round(position.coords.accuracy) + ' m)';
+
+        const mapUrl = new URL('https://www.openstreetmap.org/export/embed.html');
+        mapUrl.searchParams.set('bbox', [
+            position.coords.longitude - 0.01,
+            position.coords.latitude - 0.01,
+            position.coords.longitude + 0.01,
+            position.coords.latitude + 0.01
+        ].join(','));
+        mapUrl.searchParams.set('layer', 'mapnik');
+        mapUrl.searchParams.set('marker', latitude + ',' + longitude);
+        customerLocationMap.src = mapUrl.toString();
+        customerLocationPreview.hidden = false;
+        customerLocationStatus.textContent = 'GPS pin attached to this booking.';
+        getCustomerLocation.disabled = false;
+    }, function (error) {
+        const messages = {
+            1: 'Location permission was denied. Allow GPS access in your browser and try again.',
+            2: 'Your location could not be determined. Check your device GPS and try again.',
+            3: 'Getting your location timed out. Please try again.'
+        };
+        customerLocationStatus.textContent = messages[error.code] || 'Could not get your GPS location.';
+        getCustomerLocation.disabled = false;
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+});
+
+function updatePaymentButton() {
+    rentalSubmitButton.textContent = paymentMethod.value === 'online'
+        ? 'Continue to e-wallet payment'
+        : 'Confirm Rental Request';
+}
+
+paymentMethod.addEventListener('change', updatePaymentButton);
+updatePaymentButton();
 
 function calculateTotal() {
     if(startDate.value && endDate.value) {

@@ -14,7 +14,7 @@ require_once __DIR__ . '/../includes/navbar.php';
                 </p>
             </div>
             <div class="col-lg-5">
-                <div class="bg-white rounded-4 p-3 shadow-sm">
+                <div class="customer-filter-card rounded-4 p-3">
                     <form method="GET" action="<?php echo BASE_URL; ?>dashboard.php" class="d-flex flex-column gap-3">
                         <div>
                             <label for="carTypeFilter" class="form-label small text-uppercase text-muted fw-bold mb-2">Filter by type</label>
@@ -56,17 +56,17 @@ require_once __DIR__ . '/../includes/navbar.php';
                 <?php while($row = $cars_result->fetch_assoc()): ?>
                 <?php
                     $car_id = $row['id'];
-                    $quantity = $row['quantity'];
+                    $car_dom_id = 'car-' . substr(hash('sha256', (string)$car_id), 0, 12);
+                    $details_modal_id = $car_dom_id . '-details';
                     $today = date('Y-m-d');
                     
                     $active_count = $carModel->getActiveBookingsCount($car_id, $today);
                     
-                    $available_qty = $quantity - $active_count;
-                    if($available_qty < 0) $available_qty = 0;
+                    $available_qty = ((int)$active_count === 0 && ($row['status'] ?? 'available') === 'available') ? 1 : 0;
                     
                     $is_available = ($available_qty > 0 && ($row['status'] ?? 'available') === 'available');
                     $btn_class = $is_available ? 'btn-primary' : 'btn-secondary disabled';
-                    $btn_text = $is_available ? 'Rent Now' : 'Fully Rented';
+                    $btn_text = $is_available ? 'Book Now' : 'Fully Rented';
                     
                     $badge_class = 'bg-success';
                     $badge_text = "$available_qty Available";
@@ -87,11 +87,11 @@ require_once __DIR__ . '/../includes/navbar.php';
                     <div class="card h-100 border-0 shadow-lg rounded-4 overflow-hidden card-hover-effect">
                         <?php 
                         $car_imgs = getCarImagesList($row['image']); 
-                        $card_carousel_id = "cardCarousel_" . $row['id'];
+                        $card_carousel_id = $car_dom_id . '-gallery';
                         ?>
                         <div class="position-relative">
                             <?php if(!empty($car_imgs)): ?>
-                                <div id="<?php echo $card_carousel_id; ?>" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2500">
+                                <div id="<?php echo $card_carousel_id; ?>" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="3000">
                                     <div class="carousel-inner">
                                         <?php foreach($car_imgs as $idx => $img): ?>
                                             <div class="carousel-item <?php echo ($idx === 0) ? 'active' : ''; ?>">
@@ -132,11 +132,15 @@ require_once __DIR__ . '/../includes/navbar.php';
                                     <h5 class="text-primary mb-0 fw-bold">₱<?php echo number_format($row['price_per_day'], 2); ?></h5>
                                 </div>
                                 <div class="d-grid gap-2">
-                                    <a href="<?php echo BASE_URL; ?>car_details.php?id=<?php echo $row['id']; ?>" class="btn btn-outline-primary rounded-pill shadow-sm fw-bold py-2">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-primary rounded-pill shadow-sm fw-bold py-2"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#<?php echo $details_modal_id; ?>">
                                         View Details
-                                    </a>
+                                    </button>
                                     <?php if(isset($_SESSION['user_id'])): ?>
-                                        <a href="<?php echo BASE_URL; ?>car_details.php?id=<?php echo $row['id']; ?>" class="btn <?php echo $btn_class; ?> rounded-pill shadow-sm fw-bold py-2"><?php echo $btn_text; ?></a>
+                                        <a href="<?php echo BASE_URL; ?>car_details.php?id=<?php echo rawurlencode((string)$row['id']); ?>" class="btn <?php echo $btn_class; ?> rounded-pill shadow-sm fw-bold py-2"><?php echo $btn_text; ?></a>
                                     <?php else: ?>
                                         <a href="<?php echo BASE_URL; ?>login.php" class="btn btn-primary rounded-pill shadow-sm fw-bold py-2">Login to Rent</a>
                                     <?php endif; ?>
@@ -146,76 +150,95 @@ require_once __DIR__ . '/../includes/navbar.php';
                     </div>
                 </div>
 
-                <!-- Car Detail Modal -->
-                <div class="modal fade" id="carModal<?php echo $row['id']; ?>" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content rounded-4 border-0 shadow">
-                            <div class="modal-header border-bottom-0">
-                                <h5 class="modal-title fw-bold">Vehicle Details</h5>
+                <?php
+                    $modal_carousel_id = $car_dom_id . '-details-gallery';
+                    $vehicle_description = trim((string)($row['description'] ?? ''));
+                ?>
+                <div
+                    class="modal fade customer-car-details"
+                    id="<?php echo $details_modal_id; ?>"
+                    tabindex="-1"
+                    aria-labelledby="<?php echo $details_modal_id; ?>-title"
+                    aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+                        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                            <div class="modal-header border-0 px-4 pt-4 pb-2">
+                                <h2 class="modal-title h4 fw-bold mb-0" id="<?php echo $details_modal_id; ?>-title">
+                                    <?php echo htmlspecialchars(trim(($row['brand'] ?? '') . ' ' . ($row['model'] ?? ''))); ?>
+                                </h2>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body p-0">
-                                <?php $modal_carousel_id = "modalCarousel_" . $row['id']; ?>
-                                <?php if(!empty($car_imgs)): ?>
-                                    <div id="<?php echo $modal_carousel_id; ?>" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2500">
-                                        <?php if(count($car_imgs) > 1): ?>
-                                            <div class="carousel-indicators">
-                                                <?php foreach($car_imgs as $idx => $img): ?>
-                                                    <button type="button" data-bs-target="#<?php echo $modal_carousel_id; ?>" data-bs-slide-to="<?php echo $idx; ?>" class="<?php echo ($idx === 0) ? 'active' : ''; ?>"></button>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                        <div class="carousel-inner">
-                                            <?php foreach($car_imgs as $idx => $img): ?>
-                                                <div class="carousel-item <?php echo ($idx === 0) ? 'active' : ''; ?>">
-                                                    <img src="<?php echo BASE_URL . 'uploads/' . htmlspecialchars($img); ?>" class="d-block w-100" style="height: 400px; object-fit: cover;" alt="<?php echo htmlspecialchars($row['model']); ?>">
+                            <div class="modal-body pt-2">
+                                <?php if (!empty($car_imgs)): ?>
+                                    <div id="<?php echo $modal_carousel_id; ?>" class="carousel slide carousel-fade mb-4" data-bs-ride="carousel" data-bs-interval="3000">
+                                        <div class="carousel-inner rounded-4 bg-light">
+                                            <?php foreach ($car_imgs as $idx => $img): ?>
+                                                <div class="carousel-item <?php echo $idx === 0 ? 'active' : ''; ?>">
+                                                    <img
+                                                        src="<?php echo BASE_URL . 'uploads/' . htmlspecialchars($img, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        class="d-block w-100 customer-car-details-image"
+                                                        alt="<?php echo htmlspecialchars(trim(($row['brand'] ?? '') . ' ' . ($row['model'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
-                                        <?php if(count($car_imgs) > 1): ?>
-                                            <button class="carousel-control-prev" type="button" data-bs-target="#<?php echo $modal_carousel_id; ?>" data-bs-slide="prev">
+                                        <?php if (count($car_imgs) > 1): ?>
+                                            <button class="carousel-control-prev" type="button" data-bs-target="#<?php echo $modal_carousel_id; ?>" data-bs-slide="prev" aria-label="Previous image">
                                                 <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                                             </button>
-                                            <button class="carousel-control-next" type="button" data-bs-target="#<?php echo $modal_carousel_id; ?>" data-bs-slide="next">
+                                            <button class="carousel-control-next" type="button" data-bs-target="#<?php echo $modal_carousel_id; ?>" data-bs-slide="next" aria-label="Next image">
                                                 <span class="carousel-control-next-icon" aria-hidden="true"></span>
                                             </button>
                                         <?php endif; ?>
                                     </div>
                                 <?php else: ?>
-                                    <img src="https://via.placeholder.com/600x400?text=Premium+Fleet" class="w-100" style="height: 400px; object-fit: cover;" alt="Car">
+                                    <div class="customer-car-details-image d-flex align-items-center justify-content-center rounded-4 mb-4">
+                                        <i class="bi bi-car-front-fill display-1 text-secondary" aria-hidden="true"></i>
+                                    </div>
                                 <?php endif; ?>
-                                <div class="p-4">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h2 class="fw-bold mb-0"><?php echo htmlspecialchars($row['model']); ?></h2>
-                                        <h3 class="text-primary mb-0">₱<?php echo number_format($row['price_per_day'], 2); ?> <span class="fs-6 text-muted fw-normal">/ day</span></h3>
-                                    </div>
-                                    <div class="mb-4">
-                                        <span class="badge bg-light text-dark border me-2"><?php echo $row['year']; ?> Model</span>
-                                        <span class="badge <?php echo $badge_class; ?> text-white border border-white"><?php echo $badge_text; ?></span>
-                                    </div>
-                                    <p class="text-muted lead fs-6"><?php echo nl2br(htmlspecialchars($row['description'])); ?></p>
-                                    
-                                    <hr class="my-4">
-                                    
-                                    <div class="row g-3">
-                                        <div class="col-4 text-center border-end">
-                                            <i class="bi bi-fuel-pump fs-3 text-primary mb-2"></i>
-                                            <p class="small text-muted mb-0">Full Tank</p>
+
+                                <div class="row g-3 mb-4">
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Plate number</span>
+                                            <strong><?php echo htmlspecialchars((string)($row['plate_number'] ?? $car_id)); ?></strong>
                                         </div>
-                                        <div class="col-4 text-center border-end">
-                                            <i class="bi bi-speedometer2 fs-3 text-primary mb-2"></i>
-                                            <p class="small text-muted mb-0">Unlimited Mileage</p>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Year</span>
+                                            <strong><?php echo htmlspecialchars((string)($row['year'] ?? 'N/A')); ?></strong>
                                         </div>
-                                        <div class="col-4 text-center">
-                                            <i class="bi bi-shield-check fs-3 text-primary mb-2"></i>
-                                            <p class="small text-muted mb-0">Insured</p>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Type</span>
+                                            <strong class="text-capitalize"><?php echo htmlspecialchars((string)($row['type'] ?? 'N/A')); ?></strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Daily rate</span>
+                                            <strong class="text-primary">₱<?php echo number_format((float)$row['price_per_day'], 2); ?></strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Availability</span>
+                                            <strong class="<?php echo $is_available ? 'text-success' : 'text-danger'; ?>"><?php echo htmlspecialchars($badge_text); ?></strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="customer-car-detail">
+                                            <span>Owner</span>
+                                            <strong><?php echo htmlspecialchars((string)($row['owner_name'] ?? 'System Administrator')); ?></strong>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="modal-footer border-top-0 p-4 bg-light rounded-bottom-4">
-                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
-                                <a href="<?php echo BASE_URL; ?>car_details.php?id=<?php echo $row['id']; ?>" class="btn <?php echo $btn_class; ?> rounded-pill px-4 fw-bold shadow-sm"><?php echo $is_available ? 'Proceed to Rent' : 'Unavailable'; ?></a>
+
+                                <div class="customer-car-detail-description">
+                                    <h3 class="h6 fw-bold mb-2">Description</h3>
+                                    <p class="text-secondary mb-0 lh-lg"><?php echo $vehicle_description !== '' ? nl2br(htmlspecialchars($vehicle_description)) : 'No description provided.'; ?></p>
+                                </div>
                             </div>
                         </div>
                     </div>

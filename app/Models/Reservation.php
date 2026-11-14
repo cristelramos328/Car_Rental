@@ -21,7 +21,7 @@ class Reservation {
         $status = self::STATUS_PENDING;
         
         $stmt = $this->db->prepare("INSERT INTO reservations (user_id, car_id, start_date, end_date, status, notes) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iissss", $user_id, $car_id, $start_date, $end_date, $status, $notes);
+        $stmt->bind_param("isssss", $user_id, $car_id, $start_date, $end_date, $status, $notes);
         return $stmt->execute();
     }
 
@@ -32,7 +32,7 @@ class Reservation {
         $stmt = $this->db->prepare("SELECT r.*, u.name as user_name, u.email, c.model as car_model, c.brand, c.plate_number 
                                    FROM reservations r 
                                    LEFT JOIN users u ON r.user_id = u.id 
-                                   LEFT JOIN cars c ON r.car_id = c.id 
+                                   LEFT JOIN cars c ON r.car_id = c.plate_number
                                    WHERE r.id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -46,7 +46,7 @@ class Reservation {
         $query = "SELECT r.*, u.name as user_name, u.email, c.model as car_model, c.brand, c.plate_number 
                   FROM reservations r 
                   LEFT JOIN users u ON r.user_id = u.id 
-                  LEFT JOIN cars c ON r.car_id = c.id";
+                  LEFT JOIN cars c ON r.car_id = c.plate_number";
         
         if ($status && in_array($status, [self::STATUS_PENDING, self::STATUS_CONFIRMED, self::STATUS_CANCELLED, self::STATUS_COMPLETED])) {
             $query .= " WHERE r.status = '$status'";
@@ -71,7 +71,7 @@ class Reservation {
         
         $query = "SELECT r.*, c.model as car_model, c.brand, c.plate_number, c.price_per_day 
                   FROM reservations r 
-                  LEFT JOIN cars c ON r.car_id = c.id 
+                  LEFT JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.user_id = ?";
         
         if ($status && in_array($status, [self::STATUS_PENDING, self::STATUS_CONFIRMED, self::STATUS_CANCELLED, self::STATUS_COMPLETED])) {
@@ -96,7 +96,7 @@ class Reservation {
      * Get reservations for vehicle
      */
     public function getByCarId($car_id, $status = null) {
-        $car_id = (int)$car_id;
+        $car_id = (string)$car_id;
         
         $query = "SELECT r.*, u.name as user_name, u.email, u.phone 
                   FROM reservations r 
@@ -112,9 +112,9 @@ class Reservation {
         $stmt = $this->db->prepare($query);
         
         if ($status) {
-            $stmt->bind_param("is", $car_id, $status);
+            $stmt->bind_param("ss", $car_id, $status);
         } else {
-            $stmt->bind_param("i", $car_id);
+            $stmt->bind_param("s", $car_id);
         }
         
         $stmt->execute();
@@ -169,7 +169,7 @@ class Reservation {
      * Check if vehicle is available for reservation period
      */
     public function isAvailableForPeriod($car_id, $start_date, $end_date, $exclude_reservation_id = null) {
-        $car_id = (int)$car_id;
+        $car_id = (string)$car_id;
         
         // Check for overlapping reservations
         $query = "SELECT COUNT(*) as count FROM reservations 
@@ -183,7 +183,7 @@ class Reservation {
         }
         
         $stmt = $this->db->prepare($query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -195,10 +195,15 @@ class Reservation {
         $rental_query = "SELECT COUNT(*) as count FROM rentals 
                         WHERE car_id = ? 
                         AND status IN ('approved', 'pending')
+                        AND NOT EXISTS (
+                            SELECT 1 FROM transactions p
+                            WHERE p.rental_id = rentals.id AND p.payment_method = 'online'
+                              AND p.payment_status IN ('pending', 'cancelled')
+                        )
                         AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))";
         
         $stmt = $this->db->prepare($rental_query);
-        $stmt->bind_param("issssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
+        $stmt->bind_param("sssssss", $car_id, $end_date, $start_date, $end_date, $start_date, $start_date, $end_date);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         
@@ -248,7 +253,7 @@ class Reservation {
         $query = "SELECT r.*, u.name as user_name, u.email, u.phone, c.model as car_model, c.brand 
                   FROM reservations r 
                   LEFT JOIN users u ON r.user_id = u.id 
-                  LEFT JOIN cars c ON r.car_id = c.id 
+                  LEFT JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.status IN ('pending', 'confirmed') 
                   AND r.start_date <= DATE_ADD(CURDATE(), INTERVAL $days DAY)
                   AND r.start_date >= CURDATE()

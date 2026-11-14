@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Models\Reservation;
 use App\Models\Car;
+use App\Models\User;
 
 class ReservationController {
     private $db;

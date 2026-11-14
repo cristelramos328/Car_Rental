@@ -35,7 +35,7 @@ class Rental {
         
         $status = self::STATUS_PENDING;
         $stmt = $this->db->prepare("INSERT INTO rentals (user_id, car_id, start_date, end_date, total_price, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iissdss", $user_id, $car_id, $start_date, $end_date, $total_price, $status, $notes);
+        $stmt->bind_param("isssdss", $user_id, $car_id, $start_date, $end_date, $total_price, $status, $notes);
         return $stmt->execute();
     }
 
@@ -46,7 +46,7 @@ class Rental {
         $stmt = $this->db->prepare("SELECT r.*, u.email, u.name as user_name, u.phone, c.model as car_model, c.brand, c.plate_number, c.price_per_day
                                    FROM rentals r 
                                    LEFT JOIN users u ON r.user_id = u.id 
-                                   LEFT JOIN cars c ON r.car_id = c.id 
+                                   LEFT JOIN cars c ON r.car_id = c.plate_number
                                    WHERE r.id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -68,7 +68,7 @@ class Rental {
         
         $query = "SELECT r.*, c.model, c.brand, c.image, c.price_per_day 
                   FROM rentals r 
-                  JOIN cars c ON r.car_id = c.id 
+                  JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.user_id = ?";
         
         if ($status && in_array($status, [self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED, self::STATUS_COMPLETED, self::STATUS_CANCELLED])) {
@@ -90,7 +90,7 @@ class Rental {
         $query = "SELECT r.*, u.name as user_name, u.email, u.phone, c.model as car_model, c.brand, c.plate_number
                   FROM rentals r 
                   JOIN users u ON r.user_id = u.id 
-                  JOIN cars c ON r.car_id = c.id";
+                  JOIN cars c ON r.car_id = c.plate_number";
         
         if ($status && in_array($status, [self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED, self::STATUS_COMPLETED, self::STATUS_CANCELLED])) {
             $query .= " WHERE r.status = '$status'";
@@ -115,7 +115,7 @@ class Rental {
         $query = "SELECT r.*, u.name as user_name, c.model, c.year, c.image 
                   FROM rentals r 
                   JOIN users u ON r.user_id = u.id 
-                  JOIN cars c ON r.car_id = c.id 
+                  JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.status = '" . self::STATUS_COMPLETED . "'
                   ORDER BY r.created_at DESC 
                   LIMIT $limit";
@@ -126,7 +126,7 @@ class Rental {
      * Get rentals by car ID
      */
     public function getByCarId($car_id, $status = null) {
-        $car_id = (int)$car_id;
+        $car_id = (string)$car_id;
         
         $query = "SELECT r.*, u.name as user_name, u.email, u.phone
                   FROM rentals r 
@@ -142,9 +142,9 @@ class Rental {
         $stmt = $this->db->prepare($query);
         
         if ($status) {
-            $stmt->bind_param("is", $car_id, $status);
+            $stmt->bind_param("ss", $car_id, $status);
         } else {
-            $stmt->bind_param("i", $car_id);
+            $stmt->bind_param("s", $car_id);
         }
         
         $stmt->execute();
@@ -233,7 +233,7 @@ class Rental {
         $query = "SELECT r.*, u.name as user_name, u.email, c.model as car_model
                   FROM rentals r 
                   JOIN users u ON r.user_id = u.id 
-                  JOIN cars c ON r.car_id = c.id 
+                  JOIN cars c ON r.car_id = c.plate_number
                   WHERE r.start_date >= ? AND r.start_date <= ?";
         
         if ($status) {

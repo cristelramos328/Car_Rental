@@ -33,7 +33,6 @@ require_once __DIR__ . '/../includes/header.php';
                                 <th class="py-3 text-uppercase text-muted small fw-bold tracking-wide">Type</th>
                                 <th class="py-3 text-uppercase text-muted small fw-bold tracking-wide">Year</th>
                                 <th class="py-3 text-uppercase text-muted small fw-bold tracking-wide">Daily Rate</th>
-                                <th class="py-3 text-uppercase text-muted small fw-bold tracking-wide">Available Stock</th>
                                 <th class="py-3 text-uppercase text-muted small fw-bold tracking-wide">Status</th>
                                 <th class="text-end pe-4 py-3 text-uppercase text-muted small fw-bold tracking-wide">Actions</th>
                             </tr>
@@ -45,13 +44,11 @@ require_once __DIR__ . '/../includes/header.php';
                                         $imgs = getCarImagesList($row['image']); 
                                         $primary_img = !empty($imgs) ? BASE_URL . 'uploads/' . $imgs[0] : null;
 
-                                        $car_id = (int)$row['id'];
-                                        $total_stock = (int)$row['quantity'];
+                                        $car_id = (string)$row['id'];
                                         $today = date('Y-m-d');
                                         $active_count = $this->carModel->getActiveBookingsCount($car_id, $today);
-                                        $available_stock = max(0, $total_stock - $active_count);
                                         
-                                        $is_fully_rented = ($available_stock <= 0 || $row['status'] === 'rented');
+                                        $is_fully_rented = ($active_count > 0 || $row['status'] === 'rented');
                                         $real_status = $is_fully_rented ? 'rented' : $row['status'];
                                     ?>
                                     <tr>
@@ -83,14 +80,6 @@ require_once __DIR__ . '/../includes/header.php';
                                         <td class="text-muted"><?php echo $row['year']; ?></td>
                                         <td class="fw-bold text-primary">₱<?php echo number_format($row['price_per_day'], 2); ?></td>
                                         <td>
-                                            <div class="d-flex flex-column">
-                                                <span class="fw-bold fs-6 <?php echo ($available_stock > 0) ? 'text-success' : 'text-danger'; ?>">
-                                                    <?php echo $available_stock; ?> Available
-                                                </span>
-                                                <small class="text-muted">Total units: <?php echo $total_stock; ?></small>
-                                            </div>
-                                        </td>
-                                        <td>
                                             <?php if ($is_fully_rented): ?>
                                                 <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2">
                                                     <i class="bi bi-x-circle-fill me-1"></i>Fully Rented
@@ -109,14 +98,14 @@ require_once __DIR__ . '/../includes/header.php';
                                             <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold me-1 hover-shadow" onclick='editCar(<?php echo htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8'); ?>)'>
                                                 <i class="bi bi-pencil-square me-1"></i>Edit
                                             </button>
-                                            <a href="<?php echo BASE_URL; ?>admin/cars.php?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-light border text-danger rounded-pill px-3 fw-bold hover-shadow" onclick="return confirm('Delete this car? This action cannot be undone.')">
+                                            <a href="<?php echo BASE_URL; ?>admin/cars.php?delete=<?php echo rawurlencode((string)$row['id']); ?>" class="btn btn-sm btn-light border text-danger rounded-pill px-3 fw-bold hover-shadow" onclick="return confirm('Delete this car? This action cannot be undone.')">
                                                 <i class="bi bi-trash me-1"></i>Delete
                                             </a>
                                         </td>
                                     </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
-                                <tr><td colspan="8" class="text-center py-5 text-muted">No cars found in fleet. Click "Add New Car" above to add one.</td></tr>
+                                <tr><td colspan="7" class="text-center py-5 text-muted">No cars found in fleet. Click "Add New Car" above to add one.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -128,7 +117,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- Add/Edit Car Modal -->
 <div class="modal fade" id="carModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg rounded-4">
             <form action="<?php echo BASE_URL; ?>admin/cars.php" method="POST" enctype="multipart/form-data">
                 <div class="modal-header border-bottom">
@@ -140,11 +129,22 @@ require_once __DIR__ . '/../includes/header.php';
                     <input type="hidden" name="current_image" id="current_image">
                     
                     <div class="row g-3 mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-bold">Car Model / Brand</label>
-                            <input type="text" name="model" id="model" class="form-control rounded-3" placeholder="e.g. Toyota Camry 2.5V" required>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Brand</label>
+                            <input type="text" name="brand" id="brand" class="form-control rounded-3" placeholder="e.g. Toyota" required>
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label fw-bold">Model</label>
+                            <input type="text" name="model" id="model" class="form-control rounded-3" placeholder="e.g. Camry 2.5V" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Plate Number</label>
+                            <input type="text" name="plate_number" id="plate_number" class="form-control rounded-3 text-uppercase" placeholder="e.g. ABC 1234" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Vehicle Type</label>
                             <select name="type" id="type" class="form-select rounded-3">
                                 <option value="sedan">Sedan</option>
@@ -157,21 +157,13 @@ require_once __DIR__ . '/../includes/header.php';
                                 <option value="other">Other</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Year</label>
                             <input type="number" name="year" id="year" class="form-control rounded-3" placeholder="2024" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Price per Day (₱)</label>
                             <input type="number" step="0.01" name="price" id="price" class="form-control rounded-3" placeholder="2500.00" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Total Fleet Stock</label>
-                            <input type="number" name="quantity" id="quantity" class="form-control rounded-3" min="1" value="1" required>
-                            <small class="text-muted">Total units of this car model in fleet</small>
                         </div>
                     </div>
 
@@ -192,7 +184,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <!-- Multi-Image Upload & Preview Section -->
                     <div class="border rounded-3 p-3 bg-light mb-3">
                         <label class="form-label fw-bold d-block mb-2">
-                            <i class="bi bi-images me-2 text-primary"></i>Vehicle Gallery Photos (Select up to 4 photos max)
+                            <i class="bi bi-images me-2 text-primary"></i>Vehicle Gallery Photos (Select up to 8 photos max)
                         </label>
 
                         <!-- Image Preview Thumbnails Container -->
@@ -257,14 +249,14 @@ function viewGallery(images, modelName) {
 
 // Live preview & validation when user selects new image files
 function handleImageSelection(input) {
-    const maxAllowed = 4;
+    const maxAllowed = 8;
     const badge = document.getElementById('imageCountBadge');
     const container = document.getElementById('imagePreviewContainer');
     
     if (input.files && input.files.length > maxAllowed) {
         Swal.fire({
-            title: 'Maximum 4 Photos',
-            text: 'You can only upload a maximum of 4 photos per vehicle.',
+            title: 'Maximum 8 Photos',
+            text: 'You can only upload a maximum of 8 photos per vehicle.',
             icon: 'warning',
             confirmButtonColor: '#2563eb'
         });
@@ -276,7 +268,7 @@ function handleImageSelection(input) {
 
     if (input.files && input.files.length > 0) {
         if (badge) {
-            badge.innerText = `✓ ${input.files.length} photo(s) selected (Maximum 4 allowed)`;
+            badge.innerText = `✓ ${input.files.length} photo(s) selected (Maximum 8 allowed)`;
             badge.style.display = 'block';
         }
         
@@ -349,10 +341,11 @@ function renderExistingImagePreviews(imgJsonOrString) {
 function editCar(car){
     document.getElementById('modalTitle').innerText = 'Edit Car';
     document.getElementById('car_id').value = car.id;
+    document.getElementById('brand').value = car.brand || '';
+    document.getElementById('plate_number').value = car.plate_number || '';
     document.getElementById('model').value = car.model || '';
     document.getElementById('year').value = car.year || '';
     document.getElementById('price').value = car.price_per_day || '';
-    document.getElementById('quantity').value = car.quantity || '1';
     document.getElementById('description').value = car.description || '';
     document.getElementById('status').value = car.status || 'available';
     document.getElementById('type').value = car.type || 'sedan';
@@ -370,7 +363,6 @@ function editCar(car){
 function resetForm(){
     document.getElementById('modalTitle').innerText = 'Add New Car';
     document.getElementById('car_id').value = '';
-    document.getElementById('quantity').value = '1';
     document.getElementById('type').value = 'sedan';
     document.querySelector('#carModal form').reset();
 

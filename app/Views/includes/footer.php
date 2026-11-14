@@ -18,6 +18,10 @@
                 </div>
             </div>
         </div>
+        <div class="site-footer-links mt-3">
+            <a href="<?php echo BASE_URL; ?>privacy_policy.php">Privacy Policy</a>
+            <a href="<?php echo BASE_URL; ?>terms.php">Terms &amp; Conditions</a>
+        </div>
         <div class="site-footer-bottom">&copy; <?php echo date('Y'); ?> CAR RENTAL. All rights reserved.</div>
     </div>
 </footer>
