@@ -8,7 +8,7 @@
                 </a>
             </div>
             <div class="col-lg-4 text-lg-center">
-                <div class="site-footer-meta">
+                <div class="site-footer-meta site-footer-meta-center">
                     <span><i class="bi bi-envelope me-1"></i>support@carrental.com</span>
                 </div>
             </div>

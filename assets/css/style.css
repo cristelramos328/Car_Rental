@@ -296,6 +296,10 @@ body {
     color: rgba(255, 255, 255, 0.72);
 }
 
+.site-footer-meta-center {
+    justify-content: center;
+}
+
 .site-footer-bottom {
     margin-top: 1.5rem;
     padding-top: 1rem;
@@ -303,6 +307,20 @@ body {
     text-align: center;
     color: rgba(255, 255, 255, 0.7);
     font-size: 0.85rem;
+}
+
+@media (max-width: 991.98px) {
+    .site-footer .row > div {
+        text-align: center;
+    }
+
+    .site-footer-brand {
+        justify-content: center;
+    }
+
+    .site-footer-meta {
+        justify-content: center;
+    }
 }
 
 /* =============================================
